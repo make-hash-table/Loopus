@@ -9,6 +9,7 @@
 (defun ins (e)
   (break "Inspect ~a" e))
 
+
 ;; To create points on the domain side
 ;; 1 global time
 ;; 1 for each variable
@@ -26,6 +27,41 @@
 
 ;; The space of schedule (domain -> domain)
 (defparameter *space-map-schedule* (isl:create-space-map 0 *size-domain* *size-domain*))
+
+;; How many free variable we can have
+(defparameter *size-free-parameters* 5)
+
+;; A hack. List of all loop variables
+(defparameter possible-loop-variables (mapcar #'read-from-string (list "C0" "C1" "C2" "C3" "C4" "C5" "C6" "C7" "C8" "C9")))
+
+;; Add one parameter for each loop variable
+;; The position of these will be the depth at which we are (0 for the first loop var)
+(defparameter *loop-variable-loopus-to-isl* (make-hash-table :test 'equal))
+(loop for i below (1- *size-domain*) do
+  (let ((id (isl::make-gensym-identifier 'loop-var)))
+    (setf (gethash (symbol-name (isl:identifier-name id)) *loop-variable-loopus-to-isl*) (nth i possible-loop-variables))
+    (setf *space-domain* (isl::space-add-param-id *space-domain* id))
+    (setf *space-range* (isl::space-add-param-id *space-range* id))
+    (setf *space-map-domain-range* (isl::space-add-param-id *space-map-domain-range* id))
+    (setf *space-map-schedule* (isl::space-add-param-id *space-map-schedule* id))))
+
+
+;; Add parameters from free variables
+;; Position can be found with the hashtable
+(defparameter *free-variable-to-index* (make-hash-table :test 'equal))
+(loop for i below *size-free-parameters* do
+  (let ((id (isl::make-gensym-identifier 'free-variable)))
+    (setf (gethash (symbol-name (isl:identifier-name id)) *free-variable-to-index*) i)
+    (setf *space-domain* (isl::space-add-param-id *space-domain* id))
+    (setf *space-range* (isl::space-add-param-id *space-range* id))
+    (setf *space-map-domain-range* (isl::space-add-param-id *space-map-domain-range* id))
+    (setf *space-map-schedule* (isl::space-add-param-id *space-map-schedule* id))))
+
+;; hashtable of ir-construct-node to position of the identifier
+(defparameter *construct-to-identifier* nil) ;; ir-construct-node to position (integer)
+(defparameter position-next-free-variable nil) ;; at first it's *size-domain*. Gets incf each time
+
+
 
 ;; Definition of variables that will hold the set/map of domain/read/write/schedule
 ;; defparameter
@@ -74,12 +110,47 @@
 ;; Add the first constraint to have { [*counter-domain*, *] }
 ;; Add constraint for each loop-var to have { [*counter*, loop-var] : start <= loop-var < end }
 
+;; Add the fact that identifier of position i needs to be hgte i'th loop var
+;; useless?
+(defun add-all-loop-identifier (result)
+  (loop for p below *current-depth* do
+    (let* ((bot (isl::make-equality-constraint *space-domain*))
+           (bot (isl::equality-constraint-set-coefficient bot :dim-set (1+ p) (isl:value 1)))
+           (bot (isl::equality-constraint-set-coefficient bot :dim-param p (isl:value -1))))
+      (setf result (isl:basic-set-add-constraint result bot))))
+  result)
+
+;; Add a constant value to the constraint. Can be a known value or a variable
+(defun add-constant-constraint (constraint value i)
+  ;; 3 cases:
+  ;; + integer -> just add the value
+  ;; + loop variable -> *loop-variables* has the first value the most inner loop so we need to reverse it
+  ;; + free variable -> pick from *construct-to-identifier*
+  (if (integerp value)
+      ;; integer
+      (isl::inequality-constraint-set-constant constraint (isl:value (* i value)))
+      (let ((idx-loop-variable (position value (reverse *loop-variables*))))
+        (if idx-loop-variable
+            ;; loop variable
+            (isl::inequality-constraint-set-coefficient constraint :dim-param idx-loop-variable (isl:value i))
+            (let ((idx-free-variable
+                    ;; position-next-free-variable is incremented only when not found
+                    (alexandria:ensure-gethash
+                     (ir-construct-form (ir-value-producer value))
+                     *construct-to-identifier*
+                     (incf position-next-free-variable))))
+              (if idx-free-variable
+                  ;; free variable
+                  (isl::inequality-constraint-set-coefficient constraint :dim-param idx-free-variable (isl:value i))
+                  (break "can't happen")))))))
+
 (defparameter *counter-domain* nil)
 (defun create-new-point-domain ()
   ;; The structure we want to have: just below. Start from universe, and create each part
   ;; [*counter-domain* only once, i for i in loop-var, -1 for the rest]
   (let* ((result (isl:basic-set-universe *space-domain*))
          (*space-domain* (isl:local-space-from-space *space-domain*))
+         ;;(result (add-all-loop-identifier result))
          ;; [*, *] - universe
          (bot (isl::make-equality-constraint *space-domain*))
          (bot (isl::equality-constraint-set-constant bot (isl:value *counter-domain*)))
@@ -92,12 +163,12 @@
              (start-value (first bounds))
              (end-value (second bounds))
              (bot (isl::make-inequality-constraint *space-domain*))
-             (bot (isl::inequality-constraint-set-constant bot (isl:value (- 0 start-value))))
+             (bot (add-constant-constraint bot start-value -1))
              (bot (isl::inequality-constraint-set-coefficient bot :dim-set (1+ p) (isl:value 1)))
              (_ (setf result (isl:basic-set-add-constraint result bot)))
              ;; Creation of [*, i] : start <= i
              (bot (isl::make-inequality-constraint *space-domain*))
-             (bot (isl::inequality-constraint-set-constant bot (isl:value (- end-value 1))))
+             (bot (add-constant-constraint bot end-value 1))
              (bot (isl::inequality-constraint-set-coefficient bot :dim-set (1+ p) (isl:value -1)))
              ;; Creation of [*, i] : start <= i < end
              ;; End of this iteration: [*counter-domain*, i for one more variable] : start <= i < end
@@ -256,6 +327,13 @@
       )
     ))
 
+(defun parse-bound (value)
+  (if (typo.ntype:eql-ntype-p (ir-value-derived-ntype value))
+      ;(typo:eql-ntype-object
+      (second (ir-value-derived-type value))
+      value))
+;;      (ir-construct-form (ir-value-producer value))))
+
 ;; Todo handle lexical scope
 (defmethod update-node ((node ir-loop))
   ;; First, we add informations (the current loop variable, the depth, etc...)
@@ -269,8 +347,9 @@
   (incf *current-depth*)
   ;; Loop bounds
   (let* ((inputs (ir-node-inputs node))
-         (start (second (ir-value-declared-type (first inputs))))
-         (end (second (ir-value-declared-type (second inputs)))))
+         (start (parse-bound (first inputs)))
+         (end (parse-bound (second inputs))))
+    ;;(ins end)
     ;; todo step too ?
     (push (list start end) *loop-bounds*))
   ;; Recursive call

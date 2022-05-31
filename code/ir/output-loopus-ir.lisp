@@ -12,6 +12,9 @@
 
 (defparameter *current-depth* nil)
 
+(defparameter *position-to-loopusvariable* nil)
+
+
 (defun ins2 (&rest rest)
   (break "Inspect ~a" rest))
 (defun ins (e)
@@ -39,25 +42,50 @@
           (is-member v (cdr l)))
       nil))
 
+(defun create-loop-var (v)
+  (let ((v (if (symbolp v) v (isl::identifier-name (isl::id-expr-get-id v)))))
+    (if (is-member v *values*)
+        (is-member v *values*)
+        (let ((answer (make-instance 'ir-value)))
+          (setf *values* (cons (cons v answer) *values*))
+          answer))))
+
 (defmethod execute-expr ((expr isl::id-expr))
   (let* ((v (isl::id-expr-get-id expr))
          (v (isl::identifier-name v)))
-    (format t "Creation of a value ~a" v)
-    (if nil ;;(is-member v *values*)
-        (progn
-          (is-member v *values*)
-          )
-        (let ((answer (make-instance 'ir-value
-                                     ;;:declared-type v;;v ;;??
-                                     ;;:derived-ntype nil;;v ;;??
-                                     )))
-          (setf *values* (cons (cons v answer) *values*))
-          answer))))
+    (format t "Creation of a value ~a~%" v)
+    ;; Simple loop variable
+    (if (position v possible-loop-variables)
+        (create-loop-var v)
+        ;; If it's a loop variable coming from a free variable
+        (let ((loop-var (gethash (symbol-name v) *loop-variable-loopus-to-isl*)))
+          (if loop-var
+              (create-loop-var loop-var)
+              ;; If it's a free variable we modify the value we use, otherwise it'll be v
+              (let* ((answer (gethash
+                              (gethash (symbol-name v) *free-variable-to-index*)
+                              *position-to-loopusvariable*))
+                     (value (if answer answer v)))
+                ;; Otherwise it's a constant value
+                (if nil ;;(is-member v *values*) - todo
+                    (progn
+                      (is-member v *values*)
+                      )
+                    (let* ((construct (make-instance 'ir-node))
+                           (answer (make-instance 'ir-value
+                                                  ;;:declared-type v;;v ;;??
+                                                  ;;:derived-ntype nil;;v ;;??
+                                                  )))
+                      (change-class construct 'ir-construct
+                                    :form value
+                                    :outputs (list answer))
+                      (setf *values* (cons (cons v answer) *values*))
+                      answer))))))))
 
 (defmethod execute-expr ((expr isl::int-expr))
   (let* ((v (isl::int-expr-get-value expr))
          (v (isl::value-object v)))
-    (format t "Creation of an integer value ~a" v)
+    (format t "Creation of an integer value ~a~%" v)
     (let* ((construct (make-instance 'ir-node))
            (answer (make-instance 'ir-value
                                   :declared-type `(eql ,v)
@@ -77,7 +105,7 @@
          (increment (isl::for-node-get-inc node))
          (body (isl::for-node-get-body node)))
     ;; Generation of the nodes
-    (let* ((variable (execute-expr variable))
+    (let* ((variable (create-loop-var variable))
            (start (execute-expr start-value))
            (end (execute-expr end-value))
            (step (execute-expr increment))
@@ -85,7 +113,7 @@
       (change-class loop-node 'ir-loop
                     :variable variable
                     :inputs (list start end step)
-                    :body (make-instance 'ir-node))
+                    :body (make-instance 'ir-initial-node :dominator loop-node))
       (setf (slot-value variable '%producer) loop-node)
       (push variable *depth-loop-variables*)
       (setf (gethash node *ir-value-copies*) variable)
@@ -168,9 +196,7 @@
                         (position
                          (isl::identifier-name
                           (isl::id-expr-get-id c))
-                         (mapcar #'read-from-string
-                                 (list "C0" "C1" "C2" "C3" "C4" "C5" "C6" "C7" "C8" "C9"))
-                        ))
+                         possible-loop-variables))
                       (cdr args)))
          (old-code (let* ((cp *depth-loop-variables*)
                           (_ (setf *depth-loop-variables*

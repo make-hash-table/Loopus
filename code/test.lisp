@@ -1,7 +1,11 @@
+(in-package :loopus.ir)
+
 (declaim (optimize (debug 3)))
 
 (macrolet ((acc (v) `(setf (aref accumulator 0) (+ (aref accumulator 0) ,v))))
   (let* ((dim 10)
+         (v-start 2)
+         (v-end 5)
          ;; Single loop over arrays
          (1d (make-array dim))
          (2d (make-array (list dim dim)))
@@ -24,9 +28,14 @@
     ;; 1D
     (progn
       (print "1d")
-      ;;(loopus:for (i 0 10) (print i))
-      (loopus:for (i 0 10)
+      (print 1d)
+      (loopus:for (i v-start v-end)
         (setf (aref 1d i) i))
+      (print 1d))))
+
+
+;;(schedule-constraints-compute-schedule (schedule-constraints-from-str "{domain: \"[p0] -> { [0, i1, -1, -1, -1] : 0 <= i1 <= 9 }\" }"))
+
       (setf (aref accumulator 0) 1)
       (loopus:for (i 0 10)
         (acc (aref 1d i)))
@@ -40,20 +49,23 @@
       (loopus:for (j 0 10)
         (loopus:for (i 0 5)
           (setf (aref 2d i j) (+ i j))))
-      (loopus:for (i 0 10)
-        (loopus:for (j 0 5)
+      (loopus:for (i 2 10)
+        (loopus:for (j i 7)
           (setf (aref 2d i j) (+ i j))))
       #+or(loopus:for (i 5 10)
         (loopus:for (j 5 10)
           ;;(acc (aref 2d i j))))
           ;;(setf (aref 2d i j) 1)
           ;;(setf (aref 2d j i) 1)
-          (SETF (AREF ACCUMULATOR 0) (AREF |2D| i j))
+          (SETF (AREF ACCUMULATOR 0) (+ (aref accumulator 0) (AREF |2D| i j)))
           ))
       #+or(loopus:for (j 0 10)
         (loopus:for (i 0 5)
           ;;(acc (aref 2d i j))))
           (SETF (AREF ACCUMULATOR 0) (+ (AREF ACCUMULATOR 0) (AREF |2D| I J)))))
+
+      ;; Doesnt work because WaW dependancies
+
       (print 2d)
       (print accumulator))
 ;; todo - reverse on ast generation for proximity
