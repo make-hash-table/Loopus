@@ -82,6 +82,16 @@
                       (setf *values* (cons (cons v answer) *values*))
                       answer))))))))
 
+(defun mymax (a b) (if (< a b) b a))
+
+(defmethod execute-expr ((expr isl::op-max))
+  (let* ((answer (make-instance 'ir-value)))
+    (make-instance 'ir-call
+                   :fnrecord (make-instance 'typo:fnrecord :name 'max :function #'max)
+                   :inputs  (mapcar #'execute-expr (isl:op-expr-get-list-args expr))
+                   :outputs (list answer))
+    answer))
+
 (defmethod execute-expr ((expr isl::int-expr))
   (let* ((v (isl::int-expr-get-value expr))
          (v (isl::value-object v)))

@@ -31,7 +31,7 @@
       (print 1d)
       (loopus:for (i v-start v-end)
         (setf (aref 1d i) i))
-      (print 1d))))
+      (print 1d)
 
 
 ;;(schedule-constraints-compute-schedule (schedule-constraints-from-str "{domain: \"[p0] -> { [0, i1, -1, -1, -1] : 0 <= i1 <= 9 }\" }"))
@@ -46,12 +46,20 @@
     ;; aref not taking into accoutn?
     (progn
       (print "2d")
-      (loopus:for (j 0 10)
-        (loopus:for (i 0 5)
-          (setf (aref 2d i j) (+ i j))))
-      (loopus:for (i 2 10)
-        (loopus:for (j i 7)
-          (setf (aref 2d i j) (+ i j))))
+      (loop for i below 10 do
+        (loop for j below 10 do
+          (setf (aref 2d i j) 0)))
+      (loop for i from 2 below 9 do
+        (loop for j from 1 below i do
+          (setf (aref 2d j i) (+ i j))))
+      (print 2d)
+      (loop for i below 10 do
+        (loop for j below 10 do
+          (setf (aref 2d i j) 0)))
+      (loopus:for (i 2 9)
+        (loopus:for (j 1 i)
+          (setf (aref 2d j i) (+ i j))))
+      (print 2d))))
       #+or(loopus:for (i 5 10)
         (loopus:for (j 5 10)
           ;;(acc (aref 2d i j))))
@@ -66,7 +74,6 @@
 
       ;; Doesnt work because WaW dependancies
 
-      (print 2d)
       (print accumulator))
 ;; todo - reverse on ast generation for proximity
     ;; 3D

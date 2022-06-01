@@ -132,7 +132,7 @@
       (let ((idx-loop-variable (position value (reverse *loop-variables*))))
         (if idx-loop-variable
             ;; loop variable
-            (isl::inequality-constraint-set-coefficient constraint :dim-param idx-loop-variable (isl:value i))
+            (isl::inequality-constraint-set-coefficient constraint :dim-set (1+ idx-loop-variable) (isl:value i))
             (let ((idx-free-variable
                     ;; position-next-free-variable is incremented only when not found
                     (alexandria:ensure-gethash
