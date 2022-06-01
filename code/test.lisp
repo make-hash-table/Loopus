@@ -26,7 +26,7 @@
     ;; Sum over arrays
 
     ;; 1D
-    (progn
+    #+or(progn
       (print "1d")
       (print 1d)
       (loopus:for (i v-start v-end)

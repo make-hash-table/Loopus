@@ -241,7 +241,7 @@
          (result (isl:basic-map-add-constraint result bot))
          (bot (isl::make-equality-constraint *space-map-schedule*))
          (bot (isl::equality-constraint-set-constant bot (isl:value *counter-domain*)))
-         (bot (isl::equality-constraint-set-coefficient bot :dim-out (- *size-domain* 1) (isl:value -1)))
+         (bot (isl::equality-constraint-set-coefficient bot :dim-out 0 (isl:value -1)))
          (result (isl:basic-map-add-constraint result bot)))
     ;; Loop for each variable
     (loop for idx from 0 below *current-depth* do
@@ -254,7 +254,7 @@
                                                       ;   )
                                                       (isl:value -1)))
              (bot (isl::equality-constraint-set-coefficient bot :dim-out
-                                                            (- (- *size-domain* 2) idx)
+                                                            (1+ idx)
                                                             (isl:value 1)))
              (_ (setf result (isl:basic-map-add-constraint result bot))))))
     ;; Loop for the rest
@@ -263,7 +263,7 @@
              (bot (isl::equality-constraint-set-coefficient bot :dim-in
                                                             idx (isl:value -1)))
              (bot (isl::equality-constraint-set-coefficient bot :dim-out
-                                                            (- (- *size-domain* 1) idx)
+                                                            idx
                                                             (isl:value 1)))
              (_ (setf result (isl:basic-map-add-constraint result bot))))))
     (isl:basic-map-union-map result)))
