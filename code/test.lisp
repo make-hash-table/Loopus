@@ -26,7 +26,7 @@
     ;; Sum over arrays
 
     ;; 1D
-    #+or(progn
+    (progn
       (print "1d")
       (print 1d)
       (loopus:for (i v-start v-end)
@@ -34,10 +34,8 @@
       (print 1d)
 
 
-;;(schedule-constraints-compute-schedule (schedule-constraints-from-str "{domain: \"[p0] -> { [0, i1, -1, -1, -1] : 0 <= i1 <= 9 }\" }"))
-
-      (setf (aref accumulator 0) 1)
-      (loopus:for (i 0 10)
+      ;;(setf (aref accumulator 0) 1)
+      #+or(loopus:for (i 0 10)
         (acc (aref 1d i)))
       (print 1d)
       (print accumulator))

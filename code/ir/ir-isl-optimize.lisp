@@ -8,9 +8,7 @@
         (*map-schedule* (isl:union-map-empty *space-map-schedule*)))
     ;; Special parameters - inputs
     (setf *construct-to-identifier* (make-hash-table))
-    (setf position-next-free-variable (- *size-domain* 2))
-    ;;-1 because 1 slot is for the global counter
-    ;;-1 because we use the value returned by inc
+    (setf position-next-free-variable -1) ; -1 because we use the return value of incf, so the first use returns 0
     (setf *counter-range* 0)
     (setf *all-irnodes* (make-hash-table))
     (setf *loop-variables* '())
@@ -33,9 +31,11 @@
     (setf *depth-loop-variables* '())
     (setf *current-depth* 0)
     (setf *position-to-loopusvariable* (make-hash-table))
-    (maphash (lambda (key value) (setf (gethash (- value (1- *size-domain*)) *position-to-loopusvariable*) key)) *construct-to-identifier*)
+    (maphash (lambda (key value) (setf (gethash value *position-to-loopusvariable*) key)) *construct-to-identifier*)
     ;; End of setf special parameters
-    (let ((node (isl::get-new-result *set-domain* *map-read* *map-write* *map-schedule*)))
+    (let ((init-node (isl::get-initial-result *set-domain* *map-read* *map-write* *map-schedule*))
+          (node (isl::get-new-result *set-domain* *map-read* *map-write* *map-schedule*)))
+      (isl:pretty-print-node init-node)
       (isl:pretty-print-node node)
       (print "ok")
       (let ((r (my-main node nil)))
